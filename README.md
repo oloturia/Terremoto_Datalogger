@@ -10,3 +10,8 @@ http://www.rinkydinkelectronics.com/library.php?id=5
 
 For the SD Card, the standard Arduino library provided with the IDE is needed.
 
+For the thermo reader we used the TMP102 Library from Sparkfun:
+https://learn.sparkfun.com/tutorials/tmp102-digital-temperature-sensor-hookup-guide?_ga=2.64795818.463363351.1543772628-1613313492.1542479000
+
+Photoresistor how-to:
+http://playground.arduino.cc/Learning/PhotoResistor
