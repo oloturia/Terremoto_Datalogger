@@ -147,6 +147,7 @@ void loop()
     //Serial.println(dataString);
   } else {
     Serial.println("error opening accel.csv");
+    dataFile.close();
   }
 
   //TMP102
@@ -162,6 +163,7 @@ void loop()
     dataFile.close();    
   } else {
     Serial.println("error opening temp.csv");
+    dataFile.close();
   }
 
   //Photoresistor
