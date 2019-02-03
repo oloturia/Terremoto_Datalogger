@@ -69,6 +69,11 @@ DS1302 rtc(CERTC, IORTC, SCLKRTC);
 const int accx= A1;
 const int accy= A3;
 const int accz= A2;
+const int alertLimit = 200;
+int readX = 0;
+int readY = 0;
+int readZ = 0;
+
 
 //SD Card
 const int chipSelect = 4;
@@ -83,6 +88,9 @@ const int photo_pin = 10;
 //TMP102 thermo
 TMP102 sensorTMP(0x48);
 //const int ALERT_PIN = 9;
+
+unsigned long previousMillis = 0;
+const unsigned long delayMillis = 1000;
 
 void setup()
 {
@@ -122,55 +130,72 @@ void setup()
   Serial.println("OK");
 }
 
+String queryData(){
+    //RTC
+    String dataString ="";
+    dataString += rtc.getDateStr();
+    dataString += ",";
+    dataString += rtc.getTimeStr();
+    dataString += ",";
+    return dataString;
+}
+
 void loop()
 {
-  //RTC
-  String dataString ="";
-  dataString += rtc.getDateStr();
-  dataString += ",";
-  dataString += rtc.getTimeStr();
-  dataString += ",";
 
-  //accelerator
-  String accelString ="";
-  accelString += String(analogRead(accx));
-  accelString += ",";
-  accelString += String(analogRead(accy));
-  accelString += ",";
-  accelString += String(analogRead(accz));
+  //accelerometer runs only if the acceleration is over the limit
+
+  //Accelerometer
+  readX = analogRead(accx);
+  readY = analogRead(accy);
+  readZ = analogRead(accz);
+  if (readX > alertLimit || readY > alertLimit || readZ > alertLimit){
+    dataFile = SD.open("accel.csv", FILE_WRITE); 
+    if (dataFile){
+      for ( int i = 1; i > 100; i++){
+        String accelString ="";
+        accelString += String(analogRead(accx));
+        accelString += ",";
+        accelString += String(analogRead(accy));
+        accelString += ",";
+        accelString += String(analogRead(accz));
+        accelString = queryData() + accelString;
+        dataFile.println(accelString);
+        delay(1);
+      }
+      dataFile.close();
+      //Serial.println(dataString);
+    } else {
+      Serial.println("error opening accel.csv");
+    }
+  }
+
+  //other sensors are queried on fixed interval
+  if (millis()-previousMillis > delayMillis) {
+    previousMillis += delayMillis;
   
-  dataFile = SD.open("accel.csv", FILE_WRITE);
-  if(dataFile) {
-    accelString = dataString + accelString;
-    dataFile.println(accelString);
-    dataFile.close();
-    //Serial.println(dataString);
-  } else {
-    Serial.println("error opening accel.csv");
+    //TMP102
+    float temperature;
+    //bool alertPinState, alertRegisterState;
+    sensorTMP.wakeup();
+    temperature = sensorTMP.readTempC();
+    sensorTMP.sleep();
+    dataFile = SD.open("temp.csv", FILE_WRITE);
+    if(dataFile) {
+      String tempString = queryData() + String(temperature);
+      dataFile.println(tempString);
+      dataFile.close();    
+    } else {
+      Serial.println("error opening temp.csv");
+    }
+  
+    //Photoresistor
+    int photo_read = analogRead(photo);
+    if(photo_read > photo_limit) {
+      digitalWrite(photo_pin, LOW);
+    } else {
+      digitalWrite(photo_pin, HIGH);
+    }
   }
-
-  //TMP102
-  float temperature;
-  //bool alertPinState, alertRegisterState;
-  sensorTMP.wakeup();
-  temperature = sensorTMP.readTempC();
-  sensorTMP.sleep();
-  dataFile = SD.open("temp.csv", FILE_WRITE);
-  if(dataFile) {
-    String tempString = dataString + String(temperature);
-    dataFile.println(tempString);
-    dataFile.close();    
-  } else {
-    Serial.println("error opening temp.csv");
-  }
-
-  //Photoresistor
-  int photo_read = analogRead(photo);
-  if(photo_read > photo_limit) {
-    digitalWrite(photo_pin, LOW);
-  } else {
-    digitalWrite(photo_pin, HIGH);
-  }
-
-  delay (100);
+  
 }
