@@ -1,4 +1,7 @@
-/* DS1302_Serial_Easy 
+/* 
+ Terremoto Datalogger - 3 feb 2019
+
+ DS1302_Serial_Easy 
  Copyright (C)2015 Rinky-Dink Electronics, Henning Karlsen. All right reserved
  web: http://www.RinkyDinkElectronics.com/
 
