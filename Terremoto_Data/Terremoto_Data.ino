@@ -17,10 +17,10 @@
  MOSI pin 11
  MISO pin 12
  CLK  pin 13
- CS   pin 4
+ CS   pin 7
 
  Accelerometer attached to
- X axis pin A4
+ X axis pin A1
  Y axis pin A3
  Z axis pin A2
 */
@@ -72,28 +72,54 @@ DS1302 rtc(CERTC, IORTC, SCLKRTC);
 const int accx= A1;
 const int accy= A3;
 const int accz= A2;
-const int alertLimit = 200;
+const int alertLimit = 30;
+const int shakesLimit = 100; //maximum shakes in an interval
+int shakesNum = 0;
 int readX = 0;
 int readY = 0;
 int readZ = 0;
+int calibX;
+int calibY;
+int calibZ;
 
 
 //SD Card
-const int chipSelect = 4;
+const int chipSelect = 7;
 File dataFile;
 
 
 //Photoresistor
 const int photo = A0;
 const int photo_limit = 150;
-const int photo_pin = 10;
+const int photo_pin = 6;
 
 //TMP102 thermo
 TMP102 sensorTMP(0x48);
 //const int ALERT_PIN = 9;
 
 unsigned long previousMillis = 0;
-const unsigned long delayMillis = 1000;
+const unsigned long delayMillis = 10000;
+
+int calibrateAccel(int pin){
+  long average = 0;
+  for(int x = 0; x<100; x++){
+    average += analogRead(pin);
+    delay(5);
+  }
+  average = average/100;
+  Serial.println(average);
+  return average;
+}
+
+String queryData(){
+    //RTC
+    String dataString ="";
+    dataString += rtc.getDateStr();
+    dataString += ",";
+    dataString += rtc.getTimeStr();
+    dataString += ",";
+    return dataString;
+}
 
 void setup()
 {
@@ -103,12 +129,47 @@ void setup()
   
   // Setup Serial connection
   Serial.begin(9600);
-
-  // The following lines can be commented out to use the values already stored in the DS1302
-  //rtc.setDOW(FRIDAY);        // Set Day-of-Week to FRIDAY
-  //rtc.setTime(12, 0, 0);     // Set the time to 12:00:00 (24hr format)
-  //rtc.setDate(6, 8, 2010);   // Set the date to August 6th, 2010
-
+    // Test if SD card is present
+  if(!SD.begin(chipSelect)){
+    Serial.println("Card failed or not present");
+    while(true){}
+  }
+  //ask for a new date on startup
+  Serial.print("Current date:");
+  Serial.println(queryData());
+  Serial.println("Enter new date (format DD MM YYYY hh mm)");
+  bool set = true;
+  while(!Serial.available() && set){
+    if (millis()>10000){
+      set = false;
+      Serial.println("Timeout");
+    }
+  }
+  if(set) {
+    int rtcDay = Serial.parseInt();
+    int rtcMonth = Serial.parseInt();
+    int rtcYear = Serial.parseInt();
+    int rtcHour = Serial.parseInt();
+    int rtcMinute = Serial.parseInt();
+    rtc.setTime(rtcHour, rtcMinute, 0);
+    rtc.setDate(rtcDay, rtcMonth, rtcYear);
+  }
+  Serial.print("Date is now:");
+  Serial.println(queryData());
+  
+  //setup accelerometer
+  Serial.println("Calibrating accelerometer...");
+  pinMode(accx,INPUT);
+  pinMode(accy,INPUT);
+  pinMode(accz,INPUT);
+  calibX = calibrateAccel(accx);
+  delay(100);
+  calibY = calibrateAccel(accy);
+  delay(100);
+  calibZ = calibrateAccel(accz);
+  delay(100);
+  Serial.println("Accelerometer calibrated.");
+  
   //start TMP120
   sensorTMP.begin();
   //pinMode(ALERT_PIN,INPUT);
@@ -125,23 +186,13 @@ void setup()
   pinMode(photo,INPUT);
   pinMode(photo_pin,OUTPUT);
   
-  // Test if SD card is present
-  if(!SD.begin(chipSelect)){
-    Serial.println("Card failed or not present");
-    return;
-  }
+
   Serial.println("OK");
 }
 
-String queryData(){
-    //RTC
-    String dataString ="";
-    dataString += rtc.getDateStr();
-    dataString += ",";
-    dataString += rtc.getTimeStr();
-    dataString += ",";
-    return dataString;
-}
+
+
+
 
 void loop()
 {
@@ -152,31 +203,42 @@ void loop()
   readX = analogRead(accx);
   readY = analogRead(accy);
   readZ = analogRead(accz);
-  if (readX > alertLimit || readY > alertLimit || readZ > alertLimit){
+  if (abs(readX-calibX) > alertLimit || abs(readY-calibY) > alertLimit || abs(readZ-calibZ) > alertLimit){
+    shakesNum +=1;
+    if(shakesNum > shakesLimit){
+      Serial.println("Too many shakes, recalibrating...");
+      calibX = calibrateAccel(accx);
+      delay(100);
+      calibY = calibrateAccel(accy);
+      delay(100);
+      calibZ = calibrateAccel(accz);
+      delay(100);
+      Serial.println("Accelerometer calibrated.");
+    }
     dataFile = SD.open("accel.csv", FILE_WRITE); 
     if (dataFile){
-      for ( int i = 1; i > 100; i++){
-        String accelString ="";
-        accelString += String(analogRead(accx));
-        accelString += ",";
-        accelString += String(analogRead(accy));
-        accelString += ",";
-        accelString += String(analogRead(accz));
-        accelString = queryData() + accelString;
-        dataFile.println(accelString);
-        delay(1);
-      }
+      String accelString ="";
+      accelString += String(analogRead(readX-calibX));
+      accelString += ",";
+      accelString += String(analogRead(readY-calibY));
+      accelString += ",";
+      accelString += String(analogRead(readZ-calibZ));
+      accelString = queryData() + accelString;
+      dataFile.println(accelString);
+      delay(5);
+      Serial.println("Shake detected!");
       dataFile.close();
-      //Serial.println(dataString);
     } else {
       Serial.println("error opening accel.csv");
+      dataFile.close();
     }
+    
   }
 
   //other sensors are queried on fixed interval
   if (millis()-previousMillis > delayMillis) {
     previousMillis += delayMillis;
-  
+    shakesNum = 0;
     //TMP102
     float temperature;
     //bool alertPinState, alertRegisterState;
