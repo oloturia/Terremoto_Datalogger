@@ -98,7 +98,7 @@ TMP102 sensorTMP(0x48);
 //const int ALERT_PIN = 9;
 
 unsigned long previousMillis = 0;
-const unsigned long delayMillis = 10000;
+const unsigned long delayMillis = 60000;//one minute interval
 
 int calibrateAccel(int pin){
   long average = 0;
@@ -206,6 +206,7 @@ void loop()
   if (abs(readX-calibX) > alertLimit || abs(readY-calibY) > alertLimit || abs(readZ-calibZ) > alertLimit){
     shakesNum +=1;
     if(shakesNum > shakesLimit){
+      shakesNum = 0;
       Serial.println("Too many shakes, recalibrating...");
       calibX = calibrateAccel(accx);
       delay(100);
@@ -218,11 +219,11 @@ void loop()
     dataFile = SD.open("accel.csv", FILE_WRITE); 
     if (dataFile){
       String accelString ="";
-      accelString += String(analogRead(readX-calibX));
+      accelString += String(readX-calibX);
       accelString += ",";
-      accelString += String(analogRead(readY-calibY));
+      accelString += String(readY-calibY);
       accelString += ",";
-      accelString += String(analogRead(readZ-calibZ));
+      accelString += String(readZ-calibZ);
       accelString = queryData() + accelString;
       dataFile.println(accelString);
       delay(5);
